@@ -1,20 +1,27 @@
-// server.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { sendWebhook } from "./webhook.js"; // your function file
-dotenv.config();
+import rateLimit from "express-rate-limit";
+import bodyParser from "body-parser";
+import fetch from "node-fetch";
+import { sendWebhook } from "./webhook.js";
 
+dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// CORS only for your frontend
+app.use(cors({ origin: "https://apply.my-board.org" }));
+app.use(bodyParser.json());
 
-// Simple validation function
+// Rate limiting: max 1 application per Discord ID per 24h (simple in-memory)
+const lastSubmission = {};
+const RATE_LIMIT_HOURS = 24;
+
+// Validation function
 function validateApplication(data) {
   const errors = [];
+
   const requiredFields = [
     "discordId",
     "discordUsername",
@@ -22,42 +29,23 @@ function validateApplication(data) {
     "abusePerms",
     "useServices",
     "availableDays",
-    "codingLanguages",
     "moderationExperience",
     "rulesUnderstanding",
     "ruleViolationHandling",
     "timezone",
     "availableHours",
     "positiveEnvironment",
-    "technicalSkills",
-    "conflictResolution",
-    "hostingSupport",
+    "conflictResolution"
   ];
 
-  requiredFields.forEach((field) => {
-    if (!data[field] || (typeof data[field] === "string" && data[field].trim() === "")) {
-      errors.push(`${field} is required.`);
+  requiredFields.forEach(f => {
+    if (!data[f] || (typeof data[f] === "string" && data[f].trim() === "")) {
+      errors.push(`${f} is required.`);
     }
   });
 
-  // Minimum length validations (example)
-  const minCharFields = {
-    abusePerms: 10,
-    useServices: 5,
-    codingLanguages: 2,
-    moderationExperience: 10,
-    rulesUnderstanding: 10,
-    ruleViolationHandling: 10,
-    positiveEnvironment: 5,
-    technicalSkills: 5,
-    conflictResolution: 5,
-    hostingSupport: 5,
-  };
-
-  for (const field in minCharFields) {
-    if (data[field] && data[field].length < minCharFields[field]) {
-      errors.push(`${field} must be at least ${minCharFields[field]} characters.`);
-    }
+  if (data.abusePerms && data.abusePerms.length < 50) {
+    errors.push("abusePerms must be at least 50 characters.");
   }
 
   if (!Array.isArray(data.availableDays) || data.availableDays.length === 0) {
@@ -67,34 +55,68 @@ function validateApplication(data) {
   return errors;
 }
 
-// POST endpoint
+// Staff application endpoint
 app.post("/api/staff-application", async (req, res) => {
-  const application = req.body;
+  try {
+    const appData = req.body;
+    const errors = validateApplication(appData);
+    if (errors.length) return res.status(400).json({ success: false, errors });
 
-  const validationErrors = validateApplication(application);
-  if (validationErrors.length > 0) {
-    return res.status(400).json({ success: false, errors: validationErrors });
+    // Rate limit per Discord ID
+    const last = lastSubmission[appData.discordId];
+    if (last && (Date.now() - last < RATE_LIMIT_HOURS * 60 * 60 * 1000)) {
+      return res.status(429).json({ success: false, errors: ["You can only submit once per 24 hours."] });
+    }
+    lastSubmission[appData.discordId] = Date.now();
+
+    // Discord user object (fake for webhook)
+    const discordUser = {
+      id: appData.discordId,
+      username: appData.discordUsername,
+      global_name: appData.discriminator || "0000",
+      avatar: appData.avatar || "default",
+      email: appData.email || null
+    };
+
+    await sendWebhook(appData, discordUser);
+
+    return res.json({ success: true, message: "Application submitted successfully" });
+  } catch (err) {
+    console.error("Application error:", err);
+    return res.status(500).json({ success: false, errors: ["Server error"] });
   }
+});
 
-  // Construct a Discord user object for webhook
-  const discordUser = {
-    id: application.discordId,
-    username: application.discordUsername,
-    discriminator: application.discriminator || "0000",
-    avatar: application.avatar || "default",
-    email: application.email || null,
-  };
+// Discord OAuth callback
+app.post("/api/staff-application/discord-auth", async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ success: false, errors: ["Code is required"] });
 
   try {
-    await sendWebhook(application, discordUser);
-    return res.json({ success: true, message: "Application submitted successfully." });
+    const params = new URLSearchParams();
+    params.append("client_id", process.env.DISCORD_CLIENT_ID);
+    params.append("client_secret", process.env.DISCORD_CLIENT_SECRET);
+    params.append("grant_type", "authorization_code");
+    params.append("code", code);
+    params.append("redirect_uri", process.env.DISCORD_REDIRECT_URI);
+
+    const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
+      method: "POST",
+      body: params,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) return res.status(400).json({ success: false, errors: ["Failed to get access token"] });
+
+    const userRes = await fetch("https://discord.com/api/users/@me", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` }
+    });
+    const userData = await userRes.json();
+    return res.json(userData);
   } catch (err) {
-    console.error("Webhook error:", err);
-    return res.status(500).json({ success: false, message: "Failed to submit application." });
+    console.error("Discord OAuth error:", err);
+    return res.status(500).json({ success: false, errors: ["Discord OAuth error"] });
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
