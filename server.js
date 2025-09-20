@@ -15,25 +15,13 @@ app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use(morgan("tiny"));
 
-const allowedOrigins = [
-  "https://apply.my-board.org",
-  "http://localhost:3000"
-];
+import cors from "cors";
 
+// Allow all origins
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-
-    const normalizedOrigin = origin.replace(/\/$/, ""); // remove trailing slash
-    if (allowedOrigins.includes(normalizedOrigin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS not allowed"));
-    }
-  },
+  origin: true,
   credentials: true
 }));
-
 // ----- Health check -----
 app.get("/", (req, res) => {
   res.send("🚀 Discord Staff Application API is running!");
