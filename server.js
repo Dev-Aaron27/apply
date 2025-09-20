@@ -99,24 +99,30 @@ app.post("/api/staff-application/discord-auth", async (req, res) => {
     params.append("grant_type", "authorization_code");
     params.append("code", code);
     params.append("redirect_uri", process.env.DISCORD_REDIRECT_URI);
+    params.append("scope", "identify email guilds"); // <-- add this line
 
     const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
       method: "POST",
-      body: params,
+      body: params.toString(),
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
+
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) return res.status(400).json({ success: false, errors: ["Failed to get access token"] });
+    if (!tokenData.access_token) {
+      console.error("Token response:", tokenData);
+      return res.status(400).json({ success: false, errors: ["Failed to get access token"] });
+    }
 
     const userRes = await fetch("https://discord.com/api/users/@me", {
       headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
+
     const userData = await userRes.json();
     return res.json(userData);
+
   } catch (err) {
     console.error("Discord OAuth error:", err);
     return res.status(500).json({ success: false, errors: ["Discord OAuth error"] });
   }
 });
-
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
