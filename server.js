@@ -15,6 +15,23 @@ app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use(morgan("tiny"));
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://apply.my-board.org"
+];
+
+app.use(cors({
+  origin: function(origin, callback){
+    if(!origin) return callback(null, true); // allow non-browser requests
+    if(allowedOrigins.includes(origin)){
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 // ----- Health check -----
 app.get("/", (req, res) => {
   res.send("🚀 Discord Staff Application API is running!");
