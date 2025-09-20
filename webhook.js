@@ -5,30 +5,30 @@ export const sendWebhook = async (application, discordUser) => {
   if (!webhookURL) return;
 
   const fields = [
-    { name: "👤 Discord User", value: `${discordUser.username}#${discordUser.global_name || '0000'}\nID: ${discordUser.id}`, inline: false },
-    { name: "Q1: Age Confirmation", value: application.ageConfirmation, inline: false },
-    { name: "Q2: Why would you not abuse perms?", value: application.abusePerms, inline: false },
-    { name: "Q3: How would you use our services?", value: application.useServices, inline: false },
-    { name: "Q4: Available Days", value: application.availableDays.join(", "), inline: false },
+    { name: "👤 Discord User", value: `${discordUser.username}#${discordUser.global_name}\nID: ${discordUser.id}`, inline: false },
+    { name: "Q1: Age Confirmation", value: application.ageConfirmation || "N/A", inline: false },
+    { name: "Q2: Why would you not abuse perms?", value: application.abusePerms || "N/A", inline: false },
+    { name: "Q3: How would you use our services?", value: application.useServices || "N/A", inline: false },
+    { name: "Q4: Available Days", value: (application.availableDays || []).join(", "), inline: false },
     { name: "Q5: Coding Languages", value: application.codingLanguages || "N/A", inline: false },
-    { name: "Q6: Moderation Experience", value: application.moderationExperience, inline: false },
-    { name: "Q7: Rules Understanding", value: application.rulesUnderstanding, inline: false },
-    { name: "Q8: Handling Rule Violations", value: application.ruleViolationHandling, inline: false },
-    { name: "Q9: Timezone", value: application.timezone, inline: false },
-    { name: "Q10: Available Hours", value: application.availableHours, inline: false },
-    { name: "Q11: Positive Environment", value: application.positiveEnvironment, inline: false },
+    { name: "Q6: Moderation Experience", value: application.moderationExperience || "N/A", inline: false },
+    { name: "Q7: Rules Understanding", value: application.rulesUnderstanding || "N/A", inline: false },
+    { name: "Q8: Handling Rule Violations", value: application.ruleViolationHandling || "N/A", inline: false },
+    { name: "Q9: Timezone", value: application.timezone || "N/A", inline: false },
+    { name: "Q10: Available Hours", value: application.availableHours || "N/A", inline: false },
+    { name: "Q11: Positive Environment Contribution", value: application.positiveEnvironment || "N/A", inline: false },
     { name: "Q12: Technical Skills", value: application.technicalSkills || "N/A", inline: false },
-    { name: "Q13: Conflict Resolution", value: application.conflictResolution, inline: false },
+    { name: "Q13: Conflict Resolution", value: application.conflictResolution || "N/A", inline: false },
     { name: "Q14: Hosting / Support Experience", value: application.hostingSupport || "N/A", inline: false },
   ];
 
   const embed = {
     title: "📋 New Staff Application",
     color: 0x5865f2,
-    author: { name: `${discordUser.username}#${discordUser.global_name || '0000'}`, icon_url: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar || 'default'}.png` },
+    author: { name: `${discordUser.username}#${discordUser.global_name}`, icon_url: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` },
     fields,
     footer: { text: `User ID: ${discordUser.id}` },
-    timestamp: new Date()
+    timestamp: new Date(),
   };
 
   await fetch(webhookURL, {
