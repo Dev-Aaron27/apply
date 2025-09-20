@@ -5,6 +5,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { validateApplication } from "./middlewares/validate.js";
 import { sendWebhook } from "./utils/sendWebhook.js";
+import cors from "cors";
 
 dotenv.config();
 const app = express();
@@ -21,9 +22,9 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function(origin, callback){
-    if(!origin) return callback(null, true); // allow non-browser requests
-    if(allowedOrigins.includes(origin)){
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // allow non-browser requests like Postman
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
       return callback(new Error('Not allowed by CORS'));
