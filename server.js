@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import rateLimit from "express-rate-limit";
 import bodyParser from "body-parser";
 import fetch from "node-fetch";
 import { sendWebhook } from "./webhook.js";
@@ -14,11 +13,11 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({ origin: "https://apply.my-board.org" }));
 app.use(bodyParser.json());
 
-// Rate limiting: max 1 application per Discord ID per 24h (simple in-memory)
+// Simple in-memory rate limiting per Discord ID
 const lastSubmission = {};
 const RATE_LIMIT_HOURS = 24;
 
-// Validation function
+// --- Validation function ---
 function validateApplication(data) {
   const errors = [];
 
@@ -55,7 +54,7 @@ function validateApplication(data) {
   return errors;
 }
 
-// Staff application endpoint
+// --- Staff application endpoint ---
 app.post("/api/staff-application", async (req, res) => {
   try {
     const appData = req.body;
@@ -69,7 +68,7 @@ app.post("/api/staff-application", async (req, res) => {
     }
     lastSubmission[appData.discordId] = Date.now();
 
-    // Discord user object (fake for webhook)
+    // Create fake Discord user object for webhook
     const discordUser = {
       id: appData.discordId,
       username: appData.discordUsername,
@@ -87,19 +86,20 @@ app.post("/api/staff-application", async (req, res) => {
   }
 });
 
-// Discord OAuth callback
+// --- Discord OAuth callback ---
 app.post("/api/staff-application/discord-auth", async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ success: false, errors: ["Code is required"] });
 
   try {
+    // Exchange code for access token
     const params = new URLSearchParams();
     params.append("client_id", process.env.DISCORD_CLIENT_ID);
     params.append("client_secret", process.env.DISCORD_CLIENT_SECRET);
     params.append("grant_type", "authorization_code");
     params.append("code", code);
     params.append("redirect_uri", process.env.DISCORD_REDIRECT_URI);
-    params.append("scope", "identify email guilds"); // <-- add this line
+    params.append("scope", "identify email guilds");
 
     const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
       method: "POST",
@@ -108,11 +108,13 @@ app.post("/api/staff-application/discord-auth", async (req, res) => {
     });
 
     const tokenData = await tokenRes.json();
+    console.log("Discord token response:", tokenData);
+
     if (!tokenData.access_token) {
-      console.error("Token response:", tokenData);
-      return res.status(400).json({ success: false, errors: ["Failed to get access token"] });
+      return res.status(400).json({ success: false, errors: ["Failed to get access token", JSON.stringify(tokenData)] });
     }
 
+    // Fetch Discord user info
     const userRes = await fetch("https://discord.com/api/users/@me", {
       headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
@@ -125,4 +127,5 @@ app.post("/api/staff-application/discord-auth", async (req, res) => {
     return res.status(500).json({ success: false, errors: ["Discord OAuth error"] });
   }
 });
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
