@@ -5,7 +5,6 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { validateApplication } from "./middlewares/validate.js";
 import { sendWebhook } from "./utils/sendWebhook.js";
-import cors from "cors";
 
 dotenv.config();
 const app = express();
