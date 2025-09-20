@@ -1,63 +1,100 @@
+// server.js
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
-import helmet from "helmet";
-import morgan from "morgan";
-import { validateApplication } from "./middlewares/validate.js";
-import { sendWebhook } from "./utils/sendWebhook.js";
-
+import dotenv from "dotenv";
+import { sendWebhook } from "./webhook.js"; // your function file
 dotenv.config();
+
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-// ----- Security + logging -----
-app.use(helmet()); // basic security headers
-app.use(cors({
-  origin: true,      // allow all origins
-  credentials: true  // allow cookies/auth headers
-}));
+// Middleware
+app.use(cors());
 app.use(express.json());
-app.use(morgan("tiny"));
 
-// ----- Health check -----
-app.get("/", (req, res) => {
-  res.send("🚀 Discord Staff Application API is running!");
-});
+// Simple validation function
+function validateApplication(data) {
+  const errors = [];
+  const requiredFields = [
+    "discordId",
+    "discordUsername",
+    "ageConfirmation",
+    "abusePerms",
+    "useServices",
+    "availableDays",
+    "codingLanguages",
+    "moderationExperience",
+    "rulesUnderstanding",
+    "ruleViolationHandling",
+    "timezone",
+    "availableHours",
+    "positiveEnvironment",
+    "technicalSkills",
+    "conflictResolution",
+    "hostingSupport",
+  ];
 
-// ----- POST /applications -----
-app.post("/applications", validateApplication, async (req, res) => {
+  requiredFields.forEach((field) => {
+    if (!data[field] || (typeof data[field] === "string" && data[field].trim() === "")) {
+      errors.push(`${field} is required.`);
+    }
+  });
+
+  // Minimum length validations (example)
+  const minCharFields = {
+    abusePerms: 10,
+    useServices: 5,
+    codingLanguages: 2,
+    moderationExperience: 10,
+    rulesUnderstanding: 10,
+    ruleViolationHandling: 10,
+    positiveEnvironment: 5,
+    technicalSkills: 5,
+    conflictResolution: 5,
+    hostingSupport: 5,
+  };
+
+  for (const field in minCharFields) {
+    if (data[field] && data[field].length < minCharFields[field]) {
+      errors.push(`${field} must be at least ${minCharFields[field]} characters.`);
+    }
+  }
+
+  if (!Array.isArray(data.availableDays) || data.availableDays.length === 0) {
+    errors.push("availableDays must be a non-empty array.");
+  }
+
+  return errors;
+}
+
+// POST endpoint
+app.post("/api/staff-application", async (req, res) => {
+  const application = req.body;
+
+  const validationErrors = validateApplication(application);
+  if (validationErrors.length > 0) {
+    return res.status(400).json({ success: false, errors: validationErrors });
+  }
+
+  // Construct a Discord user object for webhook
+  const discordUser = {
+    id: application.discordId,
+    username: application.discordUsername,
+    discriminator: application.discriminator || "0000",
+    avatar: application.avatar || "default",
+    email: application.email || null,
+  };
+
   try {
-    const { token, ...application } = req.body;
-
-    if (!token) {
-      return res.status(400).json({ error: "Discord OAuth2 token required" });
-    }
-
-    // Fetch Discord user info
-    const userResponse = await fetch("https://discord.com/api/users/@me", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!userResponse.ok) {
-      return res.status(401).json({ error: "Invalid Discord token" });
-    }
-
-    const discordUser = await userResponse.json();
-
-    // Send Discord webhook
     await sendWebhook(application, discordUser);
-
-    res.status(200).json({ message: "Application submitted successfully!" });
+    return res.json({ success: true, message: "Application submitted successfully." });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("Webhook error:", err);
+    return res.status(500).json({ success: false, message: "Failed to submit application." });
   }
 });
 
-// ----- GET /applications (info only) -----
-app.get("/applications", (req, res) => {
-  res.json({ message: "POST your application to this endpoint using Discord OAuth2 token." });
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
-// ----- Start server -----
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
