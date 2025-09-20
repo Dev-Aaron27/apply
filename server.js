@@ -16,17 +16,16 @@ app.use(express.json());
 app.use(morgan("tiny"));
 
 const allowedOrigins = [
-  "http://localhost:3000",
-  "https://apply.my-board.org"
+  "https://apply.my-board.org",
+  "http://localhost:3000"
 ];
 
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin) return callback(null, true); // allow non-browser requests like Postman
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
     } else {
-      return callback(new Error('Not allowed by CORS'));
+      callback(new Error("CORS not allowed"));
     }
   },
   credentials: true
