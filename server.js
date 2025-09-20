@@ -9,35 +9,37 @@ import { sendWebhook } from "./utils/sendWebhook.js";
 dotenv.config();
 const app = express();
 
-// Security + logging
-app.use(helmet());
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+// ----- Security + logging -----
+app.use(helmet()); // basic security headers
+app.use(cors({
+  origin: true,      // allow all origins
+  credentials: true  // allow cookies/auth headers
+}));
 app.use(express.json());
 app.use(morgan("tiny"));
 
-// Allow all origins
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
 // ----- Health check -----
 app.get("/", (req, res) => {
   res.send("🚀 Discord Staff Application API is running!");
 });
 
 // ----- POST /applications -----
-app.post("/applications", validateApplication, async (req, res, next) => {
+app.post("/applications", validateApplication, async (req, res) => {
   try {
     const { token, ...application } = req.body;
 
-    if (!token) return res.status(400).json({ error: "Discord OAuth2 token required" });
+    if (!token) {
+      return res.status(400).json({ error: "Discord OAuth2 token required" });
+    }
 
-    // Fetch user info from Discord API
+    // Fetch Discord user info
     const userResponse = await fetch("https://discord.com/api/users/@me", {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    if (!userResponse.ok) return res.status(401).json({ error: "Invalid Discord token" });
+    if (!userResponse.ok) {
+      return res.status(401).json({ error: "Invalid Discord token" });
+    }
 
     const discordUser = await userResponse.json();
 
@@ -51,7 +53,7 @@ app.post("/applications", validateApplication, async (req, res, next) => {
   }
 });
 
-// ----- Optional GET /applications for info -----
+// ----- GET /applications (info only) -----
 app.get("/applications", (req, res) => {
   res.json({ message: "POST your application to this endpoint using Discord OAuth2 token." });
 });
